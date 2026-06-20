@@ -27,21 +27,11 @@
       padding: 16px;
     }
 
-    header {
-      margin-bottom: 16px;
-    }
+    header { margin-bottom: 16px; }
 
-    h1 {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: #fff;
-    }
+    h1 { font-size: 1.25rem; font-weight: 700; color: #fff; }
 
-    .subtitle {
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-top: 2px;
-    }
+    .subtitle { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
 
     .top-bar {
       display: flex;
@@ -155,10 +145,6 @@
       gap: 8px;
       font-size: 0.95rem;
     }
-    .fighter.tracked {
-      color: var(--gold);
-      font-weight: 700;
-    }
     .fighter-label {
       font-size: 0.65rem;
       font-weight: 600;
@@ -183,13 +169,6 @@
       padding-left: 38px;
     }
 
-    .empty {
-      text-align: center;
-      padding: 40px 20px;
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-
     .raw-fallback {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -211,8 +190,22 @@
       color: var(--red);
       font-size: 0.85rem;
       margin-bottom: 10px;
+      line-height: 1.6;
     }
     .error-card a { color: var(--accent); }
+    .error-card strong { display: block; margin-bottom: 6px; }
+
+    .info-card {
+      background: #111827;
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: #93c5fd;
+      font-size: 0.85rem;
+      margin-bottom: 10px;
+      line-height: 1.6;
+    }
+    .info-card a { color: var(--accent); }
 
     .skeleton {
       background: linear-gradient(90deg, var(--surface) 25%, var(--border) 50%, var(--surface) 75%);
@@ -233,6 +226,17 @@
       text-decoration: none;
     }
     .source-link:hover { color: var(--accent); }
+
+    .proxy-badge {
+      display: inline-block;
+      background: var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 0.7rem;
+      font-family: ui-monospace, monospace;
+      color: var(--muted);
+      margin-left: 4px;
+    }
   </style>
 </head>
 <body>
@@ -243,9 +247,9 @@
 </header>
 
 <div class="top-bar">
-  <button class="refresh-btn" id="refresh-btn" onclick="doFetch()">Refresh Now</button>
+  <button class="refresh-btn" id="refresh-btn" onclick="doFetch(true)">Refresh Now</button>
   <div class="countdown-wrap">
-    <span id="countdown">60</span>
+    <span id="countdown">120</span>
     next refresh
   </div>
 </div>
@@ -264,12 +268,14 @@
   </div>
 </div>
 
-<a class="source-link" href="https://www.mataction.com/battle-of-atlanta/schedule?search=&age=all&age_filter=&weight=&weight_unit=0&regs%5B%5D=5ddaab7b-1fa1-40bd-abd7-784d85b87737&regs%5B%5D=70acab5c-d792-4ee8-86b2-387922876848&regs%5B%5D=72768763-49e1-4c62-8fd2-e18f2632c33b&regs%5B%5D=7e333057-18eb-47d0-9ed1-bda71d07b26f&regs%5B%5D=bd767c42-dced-4163-b454-51fb98c285fd&regs%5B%5D=c7b53c77-eec7-4734-af3d-61ae40143145&regs%5B%5D=c838bdec-7007-49ce-b69d-365adbdce4e4&regs%5B%5D=ccdd8082-655f-4c24-9d91-55c0d1972001&regs%5B%5D=dc828c9e-aad7-4377-a5b3-83cb0b4dd215&regs%5B%5D=ebedec5a-947c-431b-a43c-b2594d78be97&regs%5B%5D=f90b389b-3454-4e36-8054-d12e34d01166&regs%5B%5D=8bc13f89-6954-44fa-8fc9-5777e32b8591" target="_blank" rel="noopener">
+<a class="source-link" id="source-link" target="_blank" rel="noopener">
   View on MatAction ↗
 </a>
 
 <script>
-const SOURCE_URL = 'https://www.mataction.com/battle-of-atlanta/schedule?search=&age=all&age_filter=&weight=&weight_unit=0&regs%5B%5D=5ddaab7b-1fa1-40bd-abd7-784d85b87737&regs%5B%5D=70acab5c-d792-4ee8-86b2-387922876848&regs%5B%5D=72768763-49e1-4c62-8fd2-e18f2632c33b&regs%5B%5D=7e333057-18eb-47d0-9ed1-bda71d07b26f&regs%5B%5D=bd767c42-dced-4163-b454-51fb98c285fd&regs%5B%5D=c7b53c77-eec7-4734-af3d-61ae40143145&regs%5B%5D=c838bdec-7007-49ce-b69d-365adbdce4e4&regs%5B%5D=ccdd8082-655f-4c24-9d91-55c0d1972001&regs%5B%5D=dc828c9e-aad7-4377-a5b3-83cb0b4dd215&regs%5B%5D=ebedec5a-947c-431b-a43c-b2594d78be97&regs%5B%5D=f90b389b-3454-4e36-8054-d12e34d01166&regs%5B%5D=8bc13f89-6954-44fa-8fc9-5777e32b8591';
+// ─── Config ──────────────────────────────────────────────────────────────────
+const REFRESH_SECS = 120; // 2 minutes — avoids proxy rate limits
+const FETCH_TIMEOUT_MS = 20000; // 20 s per proxy attempt
 
 const REG_IDS = [
   '5ddaab7b-1fa1-40bd-abd7-784d85b87737',
@@ -286,19 +292,63 @@ const REG_IDS = [
   '8bc13f89-6954-44fa-8fc9-5777e32b8591',
 ];
 
-// Proxies tried in order; rotate on failure
-const PROXIES = [
-  u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-];
-let proxyIdx = 0;
+// Build URL with URLSearchParams so brackets are clean (%5B%5D, no double-encoding)
+function buildSourceUrl() {
+  const base = 'https://www.mataction.com/battle-of-atlanta/schedule';
+  const p = new URLSearchParams();
+  p.set('search', '');
+  p.set('age', 'all');
+  p.set('age_filter', '');
+  p.set('weight', '');
+  p.set('weight_unit', '0');
+  REG_IDS.forEach(id => p.append('regs[]', id));
+  return base + '?' + p.toString();
+}
+const SOURCE_URL = buildSourceUrl();
 
+// Set the source link href
+document.getElementById('source-link').href = SOURCE_URL;
+
+// ─── CORS proxies ────────────────────────────────────────────────────────────
+// Each entry: [proxyFn, responseParser]
+// proxyFn(url) => fetch URL
+// responseParser(text) => HTML string
+const PROXIES = [
+  {
+    name: 'allorigins',
+    url: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+    parse: text => { const j = JSON.parse(text); return j.contents || ''; },
+  },
+  {
+    name: 'allorigins-raw',
+    url: u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    parse: text => text,
+  },
+  {
+    name: 'corsproxy.io',
+    url: u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    parse: text => text,
+  },
+  {
+    name: 'codetabs',
+    url: u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    parse: text => text,
+  },
+  {
+    name: 'thingproxy',
+    url: u => `https://thingproxy.freeboard.io/fetch/${u}`,
+    parse: text => text,
+  },
+];
+
+// Track which proxy last succeeded; start there next time
+let proxyOrder = [...PROXIES.keys()]; // [0,1,2,3,4]
+
+// ─── State ───────────────────────────────────────────────────────────────────
 let countdownTimer = null;
-let countdownVal = 60;
+let countdownVal = REFRESH_SECS;
 let isFetching = false;
 
-// ─── DOM helpers ────────────────────────────────────────────────────────────
 const el = id => document.getElementById(id);
 
 function setStatus(type, msg) {
@@ -308,30 +358,38 @@ function setStatus(type, msg) {
 
 function resetCountdown() {
   clearInterval(countdownTimer);
-  countdownVal = 60;
+  countdownVal = REFRESH_SECS;
   el('countdown').textContent = countdownVal;
   countdownTimer = setInterval(() => {
     countdownVal--;
     el('countdown').textContent = countdownVal;
-    if (countdownVal <= 0) doFetch();
+    if (countdownVal <= 0) doFetch(false);
   }, 1000);
 }
 
-// ─── Fetch ───────────────────────────────────────────────────────────────────
-async function tryFetch(url) {
-  const proxy = PROXIES[proxyIdx % PROXIES.length];
-  const res = await fetch(proxy(url), { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-  const body = await res.text();
-  // allorigins wraps in JSON; others return raw HTML
+// ─── Fetch with per-request timeout ──────────────────────────────────────────
+async function fetchWithTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const json = JSON.parse(body);
-    if (json && typeof json.contents === 'string') return json.contents;
-  } catch (_) {}
-  return body;
+    const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+    clearTimeout(tid);
+    return res;
+  } catch (e) {
+    clearTimeout(tid);
+    throw e;
+  }
 }
 
-async function doFetch() {
+async function tryProxy(proxy, sourceUrl) {
+  const proxyUrl = proxy.url(sourceUrl);
+  const res = await fetchWithTimeout(proxyUrl, FETCH_TIMEOUT_MS);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  return proxy.parse(text);
+}
+
+async function doFetch(manual = false) {
   if (isFetching) return;
   isFetching = true;
   el('refresh-btn').disabled = true;
@@ -339,15 +397,20 @@ async function doFetch() {
   resetCountdown();
 
   let html = null;
-  let lastErr = null;
+  let usedProxy = null;
+  let errors = [];
 
-  for (let attempt = 0; attempt < PROXIES.length; attempt++) {
+  // Try proxies in order, rotating so last-success goes first
+  for (let i = 0; i < proxyOrder.length; i++) {
+    const idx = proxyOrder[i];
+    const proxy = PROXIES[idx];
+    setStatus('loading', `Trying ${proxy.name}…`);
     try {
-      html = await tryFetch(SOURCE_URL);
+      html = await tryProxy(proxy, SOURCE_URL);
+      usedProxy = idx;
       break;
     } catch (e) {
-      lastErr = e;
-      proxyIdx++;
+      errors.push(`${proxy.name}: ${e.message}`);
     }
   }
 
@@ -355,49 +418,65 @@ async function doFetch() {
   el('refresh-btn').disabled = false;
 
   if (!html) {
-    setStatus('err', 'Could not reach schedule — tap Refresh to retry');
-    renderError(lastErr);
+    setStatus('err', 'All proxies failed — tap Refresh');
+    renderProxyError(errors);
     return;
   }
 
-  try {
-    const matches = parseSchedule(html);
-    render(matches, html);
-    setStatus('ok', 'Updated ' + new Date().toLocaleTimeString());
-  } catch (e) {
-    setStatus('err', 'Parse error — showing raw content');
-    renderRaw(html);
+  // Promote the winning proxy to front
+  if (usedProxy !== null && proxyOrder[0] !== usedProxy) {
+    proxyOrder = [usedProxy, ...proxyOrder.filter(i => i !== usedProxy)];
+  }
+
+  const matches = parseSchedule(html);
+  const badge = `<span class="proxy-badge">${PROXIES[usedProxy].name}</span>`;
+  const count = matches.length;
+  if (count > 0) {
+    setStatus('ok', `Updated ${new Date().toLocaleTimeString()} via ${PROXIES[usedProxy].name}`);
+    render(matches);
+  } else {
+    // Check if the fetched page has actual text content
+    const tmp = new DOMParser().parseFromString(html, 'text/html');
+    tmp.querySelectorAll('script,style').forEach(n => n.remove());
+    const bodyText = (tmp.body?.textContent || '').trim();
+
+    if (bodyText.length < 300) {
+      setStatus('err', 'Page appears JS-rendered — see note below');
+      renderJsRendered();
+    } else {
+      setStatus('ok', `Fetched via ${PROXIES[usedProxy].name} — showing raw`);
+      renderRaw(bodyText);
+    }
   }
 }
 
 // ─── Parse ───────────────────────────────────────────────────────────────────
+const TIME_RE = /\b(\d{1,2}:\d{2}\s*(?:AM|PM))/gi;
+const MAT_RE  = /\b(mat|ring|rink|court|area|floor|platform|table)\s*#?\s*(\d+[A-Z]?)/gi;
+
 function parseSchedule(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const results = [];
-
-  // Remove noise
   doc.querySelectorAll('script,style,nav,header,footer,noscript').forEach(n => n.remove());
 
-  // ── Strategy A: rows with data-attributes (common in modern tournament apps) ─
+  // Strategy A: data-attribute elements
   const regAttrEls = doc.querySelectorAll('[data-registration-id],[data-reg-id],[data-competitor-id]');
   if (regAttrEls.length > 0) {
-    // Group siblings into matches
     const seen = new Set();
-    regAttrEls.forEach(el => {
-      const parent = el.closest('[class*="match"],[class*="bout"],[class*="row"],[class*="schedule"],tr') || el.parentElement;
+    regAttrEls.forEach(node => {
+      const parent = node.closest('[class*="match"],[class*="bout"],[class*="row"],[class*="schedule"],tr') || node.parentElement;
       if (!parent || seen.has(parent)) return;
       seen.add(parent);
-      results.push(extractFromContainer(parent, true));
+      const m = extractFromContainer(parent);
+      if (m) results.push(m);
     });
-    if (results.length) return results.filter(Boolean);
+    if (results.length) return results;
   }
 
-  // ── Strategy B: table rows ──────────────────────────────────────────────────
-  const tables = doc.querySelectorAll('table');
-  tables.forEach(table => {
+  // Strategy B: table rows
+  doc.querySelectorAll('table').forEach(table => {
     const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent.trim().toLowerCase());
-    const rows = table.querySelectorAll('tbody tr, tr:not(:first-child)');
-    rows.forEach(row => {
+    table.querySelectorAll('tbody tr, tr:not(:first-child)').forEach(row => {
       const cells = Array.from(row.querySelectorAll('td'));
       if (cells.length < 2) return;
       const m = extractFromCells(cells, headers);
@@ -406,34 +485,28 @@ function parseSchedule(html) {
   });
   if (results.length) return results;
 
-  // ── Strategy C: class-name card divs ───────────────────────────────────────
-  const CARD_SEL = [
+  // Strategy C: class-name cards
+  const SEL = [
     '[class*="schedule-item"]','[class*="match-item"]','[class*="bout"]',
     '[class*="fight"]','[class*="match-card"]','[class*="schedule-row"]',
-    '[class*="competition"]'
+    '[class*="competition"]',
   ].join(',');
-  const cards = doc.querySelectorAll(CARD_SEL);
-  cards.forEach(card => {
-    const m = extractFromContainer(card, false);
+  doc.querySelectorAll(SEL).forEach(card => {
+    const m = extractFromContainer(card);
     if (m) results.push(m);
   });
   if (results.length) return results;
 
-  // ── Strategy D: any element with a time pattern near a name ────────────────
-  const allText = doc.body ? doc.body.textContent : '';
-  return extractFromRawText(allText);
+  // Strategy D: raw text scan
+  return extractFromRawText(doc.body?.textContent || '');
 }
 
-const TIME_RE = /\b(\d{1,2}:\d{2}\s*(?:AM|PM)?)/gi;
-const MAT_RE  = /\b(mat|ring|rink|court|area|floor|platform|table)\s*#?\s*(\d+[A-Z]?)/gi;
-
-function extractFromContainer(el, hasTracked) {
-  const text = el.textContent || '';
+function extractFromContainer(node) {
+  const text = node.textContent || '';
   const times = text.match(TIME_RE);
   const mats  = text.match(new RegExp(MAT_RE.source, 'gi'));
 
-  // Try to find competitor name elements
-  const nameEls = el.querySelectorAll(
+  const nameEls = node.querySelectorAll(
     '[class*="name"],[class*="competitor"],[class*="athlete"],[class*="player"],[class*="fighter"],[class*="red"],[class*="blue"]'
   );
   const names = Array.from(nameEls)
@@ -442,87 +515,61 @@ function extractFromContainer(el, hasTracked) {
 
   if (!times && !mats && !names.length) return null;
 
-  // Division hint
-  const divEl = el.querySelector('[class*="division"],[class*="category"],[class*="class"],[class*="age"],[class*="weight"]');
-  const division = divEl ? divEl.textContent.trim() : '';
-
+  const divEl = node.querySelector('[class*="division"],[class*="category"],[class*="age"],[class*="weight"]');
   return {
     time: times ? times[0] : '',
     location: mats ? mats[0] : '',
     names: dedupe(names),
-    division,
-    trackedNames: [],
+    division: divEl ? divEl.textContent.trim() : '',
   };
 }
 
 function extractFromCells(cells, headers) {
   const texts = cells.map(c => c.textContent.trim());
-
-  // Find time column
   let time = '', location = '', names = [], division = '';
 
-  if (headers.length) {
-    headers.forEach((h, i) => {
-      if (!texts[i]) return;
-      if (/time|start/i.test(h))      time = texts[i];
-      else if (/mat|ring|rink|court/i.test(h)) location = texts[i];
-      else if (/division|class|age|weight|category/i.test(h)) division = texts[i];
-      else if (/name|competitor|athlete|player|red|blue/i.test(h)) names.push(texts[i]);
-    });
-  }
+  headers.forEach((h, i) => {
+    if (!texts[i]) return;
+    if (/time|start/i.test(h)) time = texts[i];
+    else if (/mat|ring|rink|court/i.test(h)) location = texts[i];
+    else if (/division|class|age|weight|category/i.test(h)) division = texts[i];
+    else if (/name|competitor|athlete|player|red|blue/i.test(h)) names.push(texts[i]);
+  });
 
-  // Fallback: look for patterns in cell content
-  if (!time) {
-    const t = texts.find(t => TIME_RE.test(t));
-    if (t) time = t.match(TIME_RE)[0];
-  }
+  if (!time) { const t = texts.find(t => TIME_RE.test(t)); if (t) time = t.match(TIME_RE)[0]; }
   if (!location) {
     const l = texts.find(t => new RegExp(MAT_RE.source, 'i').test(t));
-    if (l) {
-      const m = l.match(new RegExp(MAT_RE.source, 'i'));
-      if (m) location = m[0];
-    }
+    if (l) { const m = l.match(new RegExp(MAT_RE.source, 'i')); if (m) location = m[0]; }
   }
   if (!names.length) {
-    names = texts.filter(t => {
-      if (!t || t.length < 3 || t.length > 60) return false;
-      if (TIME_RE.test(t)) return false;
-      if (new RegExp(MAT_RE.source, 'i').test(t)) return false;
-      if (/^\d+$/.test(t)) return false;
-      if (/division|class|age|weight|category/i.test(t) && t.length < 30) return false;
-      // Names have at least a space (first + last)
-      return t.includes(' ') || t.length < 25;
-    });
+    names = texts.filter(t =>
+      t && t.length >= 3 && t.length <= 60 &&
+      !TIME_RE.test(t) &&
+      !new RegExp(MAT_RE.source, 'i').test(t) &&
+      !/^\d+$/.test(t) &&
+      (t.includes(' ') || t.length < 25)
+    );
   }
 
   if (!time && !location && !names.length) return null;
-  return { time, location, names: dedupe(names), division, trackedNames: [] };
+  return { time, location, names: dedupe(names), division };
 }
 
 function extractFromRawText(text) {
-  // Last resort: scan plain text for time+name blocks
   const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
   const results = [];
-  let current = null;
-
+  let cur = null;
   lines.forEach(line => {
-    const timeMatch = line.match(TIME_RE);
-    const matMatch  = line.match(new RegExp(MAT_RE.source, 'i'));
-
-    if (timeMatch || matMatch) {
-      if (current) results.push(current);
-      current = {
-        time: timeMatch ? timeMatch[0] : '',
-        location: matMatch ? matMatch[0] : '',
-        names: [],
-        division: '',
-        trackedNames: [],
-      };
-    } else if (current && line.length > 2 && line.length < 60 && !line.startsWith('<')) {
-      current.names.push(line);
+    const t = line.match(TIME_RE);
+    const m = line.match(new RegExp(MAT_RE.source, 'i'));
+    if (t || m) {
+      if (cur) results.push(cur);
+      cur = { time: t ? t[0] : '', location: m ? m[0] : '', names: [], division: '' };
+    } else if (cur && line.length > 2 && line.length < 60) {
+      cur.names.push(line);
     }
   });
-  if (current) results.push(current);
+  if (cur) results.push(cur);
   return results;
 }
 
@@ -531,89 +578,64 @@ function dedupe(arr) {
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
-function render(matches, rawHtml) {
-  const container = el('container');
-
-  if (!matches || matches.length === 0) {
-    // Check if the page is JavaScript-rendered (no actual content in HTML)
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(rawHtml, 'text/html');
-    doc.querySelectorAll('script,style').forEach(n => n.remove());
-    const bodyText = (doc.body?.textContent || '').trim();
-
-    if (bodyText.length < 200) {
-      container.innerHTML = `
-        <div class="error-card">
-          <strong>JavaScript-rendered page</strong><br><br>
-          This schedule loads dynamically in the browser, so a proxy can't capture it directly.<br><br>
-          <strong>Workarounds:</strong><br>
-          1. Open <a href="${SOURCE_URL}" target="_blank" rel="noopener">mataction.com</a> and use it directly on mobile.<br>
-          2. Share this page — tap <em>Refresh</em> periodically; if the proxy provider adds JS rendering support it will work automatically.
-        </div>`;
-    } else {
-      container.innerHTML = `
-        <div class="error-card">No schedule entries found — the page structure may have changed.</div>
-        <div class="section-label">Raw page content (debug)</div>
-        <div class="raw-fallback">${escHtml(bodyText.substring(0, 4000))}</div>`;
-    }
-    return;
-  }
-
+function render(matches) {
   let html = `<div class="section-label">${matches.length} match${matches.length !== 1 ? 'es' : ''} found</div>`;
-
   matches.forEach(m => {
     const nameRows = m.names.map((name, i) => {
       const label = i === 0 ? 'Red' : i === 1 ? 'Blue' : '';
-      const tracked = m.trackedNames && m.trackedNames.includes(name);
-      return `
-        ${i === 1 ? '<div class="vs-divider">vs</div>' : ''}
-        <div class="fighter ${tracked ? 'tracked' : ''}">
+      return `${i === 1 ? '<div class="vs-divider">vs</div>' : ''}
+        <div class="fighter">
           ${label ? `<span class="fighter-label">${label}</span>` : ''}
-          ${escHtml(name)}
+          ${esc(name)}
         </div>`;
     }).join('');
-
     html += `
       <div class="card">
-        <div class="card-time">${escHtml(m.time || '—')}</div>
-        <div class="card-location">${escHtml(m.location || 'Location TBD')}</div>
+        <div class="card-time">${esc(m.time || '—')}</div>
+        <div class="card-location">${esc(m.location || 'Location TBD')}</div>
         <div class="card-names">${nameRows || '<span style="color:var(--muted)">Names not parsed</span>'}</div>
-        ${m.division ? `<div class="card-division">${escHtml(m.division)}</div>` : ''}
+        ${m.division ? `<div class="card-division">${esc(m.division)}</div>` : ''}
       </div>`;
   });
-
-  container.innerHTML = html;
+  el('container').innerHTML = html;
 }
 
-function renderError(err) {
+function renderProxyError(errors) {
   el('container').innerHTML = `
     <div class="error-card">
-      <strong>Network error</strong><br>
-      ${escHtml(String(err?.message || err))}<br><br>
-      All ${PROXIES.length} CORS proxies failed. This may be a temporary issue.<br>
-      Try refreshing or open <a href="${SOURCE_URL}" target="_blank" rel="noopener">mataction.com directly</a>.
+      <strong>All CORS proxies failed</strong>
+      ${errors.map(e => `<div style="font-size:0.75rem;opacity:0.7">${esc(e)}</div>`).join('')}
+    </div>
+    <div class="info-card">
+      The proxies that let this page fetch the schedule are rate-limited.
+      The page will automatically retry in ${REFRESH_SECS} seconds, or tap <strong>Refresh Now</strong>.<br><br>
+      You can also open <a href="${SOURCE_URL}" target="_blank" rel="noopener">mataction.com</a> directly.
     </div>`;
 }
 
-function renderRaw(html) {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  doc.querySelectorAll('script,style,noscript').forEach(n => n.remove());
-  const text = doc.body?.textContent?.trim() || html;
+function renderJsRendered() {
   el('container').innerHTML = `
-    <div class="error-card">Could not parse schedule structure — raw content below.</div>
-    <div class="raw-fallback">${escHtml(text.substring(0, 5000))}</div>`;
+    <div class="info-card">
+      <strong>Schedule loads dynamically</strong><br>
+      The page renders in a browser but CORS proxies only fetch the empty HTML shell.<br><br>
+      Open <a href="${SOURCE_URL}" target="_blank" rel="noopener">mataction.com</a> directly, or tap
+      <strong>Refresh Now</strong> — a different proxy might return the rendered version.
+    </div>`;
 }
 
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+function renderRaw(bodyText) {
+  el('container').innerHTML = `
+    <div class="error-card">No schedule entries could be parsed — raw content below.</div>
+    <div class="raw-fallback">${esc(bodyText.substring(0, 5000))}</div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
-doFetch();
+resetCountdown();
+doFetch(true);
 </script>
 </body>
 </html>
