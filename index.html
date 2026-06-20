@@ -354,8 +354,10 @@ let nameTerms = []; // lowercase partial strings to match against competitor nam
 
 function loadNameFilter() {
   const urlNames = new URLSearchParams(window.location.search).get('names');
-  const saved = urlNames || localStorage.getItem(STORAGE_KEY) || DEFAULT_NAMES;
-  if (urlNames) localStorage.setItem(STORAGE_KEY, urlNames); // persist shared link
+  // Only pre-fill with DEFAULT_NAMES when explicitly shared via ?names= URL.
+  // Leave the field blank on a bare open so UUID filtering can work without name interference.
+  const saved = urlNames || localStorage.getItem(STORAGE_KEY) || '';
+  if (urlNames) localStorage.setItem(STORAGE_KEY, urlNames);
   document.getElementById('name-filter').value = saved;
   applyNameFilter(saved);
 }
@@ -564,12 +566,16 @@ function parseSchedule(html) {
   const results = [];
   doc.querySelectorAll('script,style,nav,header,footer,noscript').forEach(n => n.remove());
 
-  // Strategy A: any element that carries a data-registration-id attribute
+  // Strategy 0: UUID scan — look for our reg IDs anywhere in the HTML
+  // (catches UUIDs in href paths, data-* attributes, or inline text)
+  const uuidResults = extractByUUIDScan(html, doc);
+  if (uuidResults.length > 0) return { matches: uuidResults, filtered: true };
+
+  // Strategy A: explicit data-registration-id attributes
   const regAttrEls = doc.querySelectorAll('[data-registration-id],[data-reg-id],[data-competitor-id],[data-id]');
   if (regAttrEls.length > 0) {
     const seen = new Set();
     regAttrEls.forEach(node => {
-      // Only consider nodes whose data attr is one of our IDs
       const attrVal = (node.getAttribute('data-registration-id') || node.getAttribute('data-reg-id') ||
                        node.getAttribute('data-competitor-id') || node.getAttribute('data-id') || '').toLowerCase();
       if (!REG_SET.has(attrVal)) return;
@@ -608,6 +614,52 @@ function parseSchedule(html) {
 
   // Strategy D: raw text scan (no UUID filtering possible)
   return { matches: extractFromRawText(doc.body?.textContent || ''), filtered: false };
+}
+
+// Strategy 0 implementation: find our UUIDs anywhere in the DOM, then walk up to extract match context
+function extractByUUIDScan(html, doc) {
+  // Quick bail-out: none of our UUIDs appear anywhere in the raw HTML
+  const lowerHtml = html.toLowerCase();
+  const foundIds = REG_IDS.filter(id => lowerHtml.includes(id.toLowerCase()));
+  if (!foundIds.length) return [];
+
+  // One pass over every element: map each found UUID to the SMALLEST element containing it
+  const idToEl = new Map();
+  doc.querySelectorAll('*').forEach(el => {
+    const h = (el.outerHTML || '').toLowerCase();
+    for (const id of foundIds) {
+      if (h.includes(id.toLowerCase())) {
+        const prev = idToEl.get(id);
+        if (!prev || h.length < (prev.outerHTML || '').length) {
+          idToEl.set(id, el);
+        }
+      }
+    }
+  });
+
+  const results = [];
+  const usedKeys = new Set();
+
+  for (const [, smallest] of idToEl) {
+    // Walk up to find a container that has time, location, or names
+    let container = smallest;
+    let match = null;
+    for (let i = 0; i < 8; i++) {
+      const m = extractFromContainer(container);
+      if (m && (m.time || m.location || m.names.length)) { match = m; break; }
+      if (!container.parentElement || container.tagName === 'BODY') break;
+      container = container.parentElement;
+    }
+    if (!match) continue;
+
+    const key = (container.outerHTML || '').substring(0, 150);
+    if (!usedKeys.has(key)) {
+      usedKeys.add(key);
+      match._tracked = true;
+      results.push(match);
+    }
+  }
+  return results;
 }
 
 function extractFromContainer(node) {
