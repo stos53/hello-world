@@ -428,14 +428,12 @@ async function doFetch(manual = false) {
     proxyOrder = [usedProxy, ...proxyOrder.filter(i => i !== usedProxy)];
   }
 
-  const matches = parseSchedule(html);
-  const badge = `<span class="proxy-badge">${PROXIES[usedProxy].name}</span>`;
-  const count = matches.length;
-  if (count > 0) {
-    setStatus('ok', `Updated ${new Date().toLocaleTimeString()} via ${PROXIES[usedProxy].name}`);
-    render(matches);
+  const { matches, filtered } = parseSchedule(html);
+  if (matches.length > 0) {
+    const note = filtered ? '' : ' (showing all — IDs not in HTML)';
+    setStatus('ok', `Updated ${new Date().toLocaleTimeString()} via ${PROXIES[usedProxy].name}${note}`);
+    render(matches, filtered);
   } else {
-    // Check if the fetched page has actual text content
     const tmp = new DOMParser().parseFromString(html, 'text/html');
     tmp.querySelectorAll('script,style').forEach(n => n.remove());
     const bodyText = (tmp.body?.textContent || '').trim();
@@ -453,37 +451,55 @@ async function doFetch(manual = false) {
 // ─── Parse ───────────────────────────────────────────────────────────────────
 const TIME_RE = /\b(\d{1,2}:\d{2}\s*(?:AM|PM))/gi;
 const MAT_RE  = /\b(mat|ring|rink|court|area|floor|platform|table)\s*#?\s*(\d+[A-Z]?)/gi;
+const REG_SET = new Set(REG_IDS.map(id => id.toLowerCase()));
+
+// Returns true if a node's outerHTML contains at least one of our registration UUIDs
+function nodeContainsTracked(node) {
+  const raw = (node.outerHTML || node.textContent || '').toLowerCase();
+  return REG_IDS.some(id => raw.includes(id.toLowerCase()));
+}
+
+// Filter a results array: keep only entries whose _src html has a UUID.
+// If nothing matched (UUIDs aren't embedded in HTML), return all with a warning flag.
+function filterByUUID(results) {
+  const tracked = results.filter(r => r._tracked);
+  return tracked.length > 0 ? { matches: tracked, filtered: true } : { matches: results, filtered: false };
+}
 
 function parseSchedule(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const results = [];
   doc.querySelectorAll('script,style,nav,header,footer,noscript').forEach(n => n.remove());
 
-  // Strategy A: data-attribute elements
-  const regAttrEls = doc.querySelectorAll('[data-registration-id],[data-reg-id],[data-competitor-id]');
+  // Strategy A: any element that carries a data-registration-id attribute
+  const regAttrEls = doc.querySelectorAll('[data-registration-id],[data-reg-id],[data-competitor-id],[data-id]');
   if (regAttrEls.length > 0) {
     const seen = new Set();
     regAttrEls.forEach(node => {
-      const parent = node.closest('[class*="match"],[class*="bout"],[class*="row"],[class*="schedule"],tr') || node.parentElement;
+      // Only consider nodes whose data attr is one of our IDs
+      const attrVal = (node.getAttribute('data-registration-id') || node.getAttribute('data-reg-id') ||
+                       node.getAttribute('data-competitor-id') || node.getAttribute('data-id') || '').toLowerCase();
+      if (!REG_SET.has(attrVal)) return;
+      const parent = node.closest('[class*="match"],[class*="bout"],[class*="row"],[class*="schedule"],tr,li') || node.parentElement;
       if (!parent || seen.has(parent)) return;
       seen.add(parent);
       const m = extractFromContainer(parent);
-      if (m) results.push(m);
+      if (m) { m._tracked = true; results.push(m); }
     });
-    if (results.length) return results;
+    if (results.length) return { matches: results, filtered: true };
   }
 
-  // Strategy B: table rows
+  // Strategy B: table rows — collect all, then UUID-filter
   doc.querySelectorAll('table').forEach(table => {
     const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent.trim().toLowerCase());
     table.querySelectorAll('tbody tr, tr:not(:first-child)').forEach(row => {
       const cells = Array.from(row.querySelectorAll('td'));
       if (cells.length < 2) return;
       const m = extractFromCells(cells, headers);
-      if (m) results.push(m);
+      if (m) { m._tracked = nodeContainsTracked(row); results.push(m); }
     });
   });
-  if (results.length) return results;
+  if (results.length) return filterByUUID(results);
 
   // Strategy C: class-name cards
   const SEL = [
@@ -493,12 +509,12 @@ function parseSchedule(html) {
   ].join(',');
   doc.querySelectorAll(SEL).forEach(card => {
     const m = extractFromContainer(card);
-    if (m) results.push(m);
+    if (m) { m._tracked = nodeContainsTracked(card); results.push(m); }
   });
-  if (results.length) return results;
+  if (results.length) return filterByUUID(results);
 
-  // Strategy D: raw text scan
-  return extractFromRawText(doc.body?.textContent || '');
+  // Strategy D: raw text scan (no UUID filtering possible)
+  return { matches: extractFromRawText(doc.body?.textContent || ''), filtered: false };
 }
 
 function extractFromContainer(node) {
@@ -521,6 +537,7 @@ function extractFromContainer(node) {
     location: mats ? mats[0] : '',
     names: dedupe(names),
     division: divEl ? divEl.textContent.trim() : '',
+    _tracked: false,
   };
 }
 
@@ -552,7 +569,7 @@ function extractFromCells(cells, headers) {
   }
 
   if (!time && !location && !names.length) return null;
-  return { time, location, names: dedupe(names), division };
+  return { time, location, names: dedupe(names), division, _tracked: false };
 }
 
 function extractFromRawText(text) {
@@ -564,7 +581,7 @@ function extractFromRawText(text) {
     const m = line.match(new RegExp(MAT_RE.source, 'i'));
     if (t || m) {
       if (cur) results.push(cur);
-      cur = { time: t ? t[0] : '', location: m ? m[0] : '', names: [], division: '' };
+      cur = { time: t ? t[0] : '', location: m ? m[0] : '', names: [], division: '', _tracked: false };
     } else if (cur && line.length > 2 && line.length < 60) {
       cur.names.push(line);
     }
@@ -578,8 +595,13 @@ function dedupe(arr) {
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
-function render(matches) {
-  let html = `<div class="section-label">${matches.length} match${matches.length !== 1 ? 'es' : ''} found</div>`;
+function render(matches, filtered) {
+  const warning = filtered ? '' : `
+    <div class="info-card" style="margin-bottom:12px;font-size:0.8rem;">
+      ⚠ Could not match by registration ID — showing all parsed matches.
+      Your competitors may be mixed in; check <a href="${SOURCE_URL}" target="_blank" rel="noopener">mataction.com</a> to confirm.
+    </div>`;
+  let html = warning + `<div class="section-label">${matches.length} match${matches.length !== 1 ? 'es' : ''}${filtered ? ' for your competitors' : ' total (unfiltered)'}</div>`;
   matches.forEach(m => {
     const nameRows = m.names.map((name, i) => {
       const label = i === 0 ? 'Red' : i === 1 ? 'Blue' : '';
