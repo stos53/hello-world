@@ -229,6 +229,21 @@
 
     .name-filter-wrap { margin-bottom: 14px; }
     .name-filter-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 5px; display: block; }
+    .name-filter-row { display: flex; gap: 6px; }
+    .share-btn {
+      flex-shrink: 0;
+      padding: 9px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .share-btn:active { opacity: 0.8; }
     .name-filter-input {
       width: 100%;
       background: var(--surface);
@@ -262,10 +277,13 @@
 </div>
 
 <div class="name-filter-wrap">
-  <label class="name-filter-label" for="name-filter">Filter by name</label>
-  <input class="name-filter-input" id="name-filter" type="text"
-    placeholder="e.g. Smith, Jones, Williams"
-    autocomplete="off" autocorrect="off" autocapitalize="off">
+  <label class="name-filter-label" for="name-filter">Competitors</label>
+  <div class="name-filter-row">
+    <input class="name-filter-input" id="name-filter" type="text"
+      placeholder="Last names, comma-separated"
+      autocomplete="off" autocorrect="off" autocapitalize="off">
+    <button class="share-btn" id="share-btn" onclick="copyShareLink()">Copy Link</button>
+  </div>
   <div class="name-filter-hint" id="name-tags"></div>
 </div>
 
@@ -325,13 +343,32 @@ const SOURCE_URL = buildSourceUrl();
 document.getElementById('source-link').href = SOURCE_URL;
 
 // ─── Name filter ─────────────────────────────────────────────────────────────
+// Default competitors — last names cover all 11 athletes (Fazio matches both Chris & Lily)
+const DEFAULT_NAMES = 'DeVine,Fonseca,Kahoohanohano,Kasarla,Murphy,Osechas,Fazio,Hindle,Castro,Nunez';
+
 const STORAGE_KEY = 'boa_name_filter';
 let nameTerms = []; // lowercase partial strings to match against competitor names
 
 function loadNameFilter() {
-  const saved = localStorage.getItem(STORAGE_KEY) || '';
+  const urlNames = new URLSearchParams(window.location.search).get('names');
+  const saved = urlNames || localStorage.getItem(STORAGE_KEY) || DEFAULT_NAMES;
+  if (urlNames) localStorage.setItem(STORAGE_KEY, urlNames); // persist shared link
   document.getElementById('name-filter').value = saved;
   applyNameFilter(saved);
+}
+
+function copyShareLink() {
+  const terms = document.getElementById('name-filter').value.trim();
+  const url = new URL(window.location.href);
+  url.search = ''; // clear any existing params
+  if (terms) url.searchParams.set('names', terms);
+  navigator.clipboard.writeText(url.toString()).then(() => {
+    const btn = document.getElementById('share-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.style.background = 'var(--green)';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+  });
 }
 
 function applyNameFilter(raw) {
