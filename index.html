@@ -308,7 +308,7 @@
 <script>
 // ─── Config ──────────────────────────────────────────────────────────────────
 const REFRESH_SECS = 120; // 2 minutes — avoids proxy rate limits
-const FETCH_TIMEOUT_MS = 20000; // 20 s per proxy attempt
+const FETCH_TIMEOUT_MS = 30000; // 30 s per proxy attempt
 
 const REG_IDS = [
   '5ddaab7b-1fa1-40bd-abd7-784d85b87737',
@@ -325,7 +325,9 @@ const REG_IDS = [
   '8bc13f89-6954-44fa-8fc9-5777e32b8591',
 ];
 
-// Build URL with URLSearchParams so brackets are clean (%5B%5D, no double-encoding)
+// Full URL with regs[] params — used only for the "View on MatAction" link.
+// Proxies receive the bare URL; the long query string causes 413/400 on some proxies
+// and the server ignores regs[] for filtering anyway (it's client-side JS on their end).
 function buildSourceUrl() {
   const base = 'https://www.mataction.com/battle-of-atlanta/schedule';
   const p = new URLSearchParams();
@@ -338,6 +340,7 @@ function buildSourceUrl() {
   return base + '?' + p.toString();
 }
 const SOURCE_URL = buildSourceUrl();
+const FETCH_URL = 'https://www.mataction.com/battle-of-atlanta/schedule';
 
 // Set the source link href
 document.getElementById('source-link').href = SOURCE_URL;
@@ -495,7 +498,7 @@ async function doFetch(manual = false) {
     const proxy = PROXIES[idx];
     setStatus('loading', `Trying ${proxy.name}…`);
     try {
-      html = await tryProxy(proxy, SOURCE_URL);
+      html = await tryProxy(proxy, FETCH_URL);
       usedProxy = idx;
       break;
     } catch (e) {
@@ -531,8 +534,9 @@ async function doFetch(manual = false) {
       setStatus('err', 'Page appears JS-rendered — see note below');
       renderJsRendered();
     } else {
-      setStatus('ok', `Fetched via ${PROXIES[usedProxy].name} — showing raw`);
-      renderRaw(bodyText);
+      setStatus('ok', `Fetched via ${PROXIES[usedProxy].name} — 0 matches parsed`);
+      // Show raw text AND a snippet of raw HTML to help diagnose the structure
+      renderRaw(bodyText, html);
     }
   }
 }
@@ -685,15 +689,30 @@ function dedupe(arr) {
 
 // ─── Render ──────────────────────────────────────────────────────────────────
 function render(matches, filtered) {
-  const visible = nameTerms.length ? matches.filter(m => matchesNameFilter(m.names)) : matches;
-  const filterNote = nameTerms.length
-    ? ` matching "${nameTerms.join(', ')}"`
-    : (filtered ? ' for your competitors' : ' total (unfiltered)');
-  const warning = filtered ? '' : `
-    <div class="info-card" style="margin-bottom:12px;font-size:0.8rem;">
-      ⚠ Could not match by registration ID — showing all parsed matches.
-      Use the name filter above to narrow results to your competitors.
+  const nameFiltered = nameTerms.length > 0;
+  const afterFilter = nameFiltered ? matches.filter(m => matchesNameFilter(m.names)) : matches;
+  // If the name filter wiped everything out, show all matches with a notice rather than a blank screen
+  const namesMissed = nameFiltered && afterFilter.length === 0 && matches.length > 0;
+  const visible = namesMissed ? matches : afterFilter;
+
+  let filterNote;
+  if (namesMissed) filterNote = ` total — names not found, showing all`;
+  else if (nameFiltered) filterNote = ` matching "${nameTerms.join(', ')}"`;
+  else if (filtered) filterNote = ' for your competitors';
+  else filterNote = ' total';
+
+  let warning = '';
+  if (namesMissed) {
+    warning = `<div class="info-card" style="margin-bottom:12px;font-size:0.8rem;">
+      Your name filter didn't match anything in these ${matches.length} results — the schedule may use different name formatting.
+      Showing all matches; edit the filter above to narrow down.
     </div>`;
+  } else if (!filtered) {
+    warning = `<div class="info-card" style="margin-bottom:12px;font-size:0.8rem;">
+      ⚠ Could not filter by registration ID — use the name filter above to find your competitors.
+    </div>`;
+  }
+
   let html = warning + `<div class="section-label">${visible.length} match${visible.length !== 1 ? 'es' : ''}${filterNote}</div>`;
   visible.forEach(m => {
     const nameRows = m.names.map((name, i) => {
@@ -738,10 +757,12 @@ function renderJsRendered() {
     </div>`;
 }
 
-function renderRaw(bodyText) {
+function renderRaw(bodyText, rawHtml) {
+  const htmlSnippet = rawHtml ? rawHtml.substring(0, 3000) : '';
   el('container').innerHTML = `
-    <div class="error-card">No schedule entries could be parsed — raw content below.</div>
-    <div class="raw-fallback">${esc(bodyText.substring(0, 5000))}</div>`;
+    <div class="error-card">No schedule entries could be parsed — page content below (screenshot this and share it to get the parser fixed).</div>
+    <div class="raw-fallback">${esc(bodyText.substring(0, 3000))}</div>
+    ${htmlSnippet ? `<details style="margin-top:8px"><summary style="font-size:0.75rem;color:var(--muted);cursor:pointer;padding:8px 0">Raw HTML (for debugging)</summary><div class="raw-fallback" style="margin-top:6px;font-size:0.65rem">${esc(htmlSnippet)}</div></details>` : ''}`;
 }
 
 function esc(s) {
