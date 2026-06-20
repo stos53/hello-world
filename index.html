@@ -227,16 +227,23 @@
     }
     .source-link:hover { color: var(--accent); }
 
-    .proxy-badge {
-      display: inline-block;
-      background: var(--border);
-      border-radius: 4px;
-      padding: 1px 5px;
-      font-size: 0.7rem;
-      font-family: ui-monospace, monospace;
-      color: var(--muted);
-      margin-left: 4px;
+    .name-filter-wrap { margin-bottom: 14px; }
+    .name-filter-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 5px; display: block; }
+    .name-filter-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
     }
+    .name-filter-input:focus { border-color: var(--accent); }
+    .name-filter-input::placeholder { color: var(--muted); }
+    .name-filter-hint { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+    .name-tag { display: inline-block; background: var(--accent); color: #fff; border-radius: 4px; padding: 1px 7px; font-size: 0.72rem; margin: 3px 3px 0 0; }
   </style>
 </head>
 <body>
@@ -252,6 +259,14 @@
     <span id="countdown">120</span>
     next refresh
   </div>
+</div>
+
+<div class="name-filter-wrap">
+  <label class="name-filter-label" for="name-filter">Filter by name</label>
+  <input class="name-filter-input" id="name-filter" type="text"
+    placeholder="e.g. Smith, Jones, Williams"
+    autocomplete="off" autocorrect="off" autocapitalize="off">
+  <div class="name-filter-hint" id="name-tags"></div>
 </div>
 
 <div class="status" id="status">
@@ -308,6 +323,43 @@ const SOURCE_URL = buildSourceUrl();
 
 // Set the source link href
 document.getElementById('source-link').href = SOURCE_URL;
+
+// ─── Name filter ─────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'boa_name_filter';
+let nameTerms = []; // lowercase partial strings to match against competitor names
+
+function loadNameFilter() {
+  const saved = localStorage.getItem(STORAGE_KEY) || '';
+  document.getElementById('name-filter').value = saved;
+  applyNameFilter(saved);
+}
+
+function applyNameFilter(raw) {
+  nameTerms = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const tagsEl = document.getElementById('name-tags');
+  if (nameTerms.length) {
+    tagsEl.innerHTML = nameTerms.map(t => `<span class="name-tag">${esc(t)}</span>`).join('');
+  } else {
+    tagsEl.innerHTML = '<span style="color:var(--muted)">Type names above — separate multiple with commas</span>';
+  }
+}
+
+document.getElementById('name-filter').addEventListener('input', e => {
+  const val = e.target.value;
+  localStorage.setItem(STORAGE_KEY, val);
+  applyNameFilter(val);
+  // Re-render last result if we have one
+  if (lastMatches) render(lastMatches, lastFiltered);
+});
+
+let lastMatches = null, lastFiltered = false;
+
+function matchesNameFilter(names) {
+  if (!nameTerms.length) return true; // no filter = show all
+  return nameTerms.some(term =>
+    names.some(name => name.toLowerCase().includes(term))
+  );
+}
 
 // ─── CORS proxies ────────────────────────────────────────────────────────────
 // Each entry: [proxyFn, responseParser]
@@ -429,9 +481,9 @@ async function doFetch(manual = false) {
   }
 
   const { matches, filtered } = parseSchedule(html);
+  lastMatches = matches; lastFiltered = filtered;
   if (matches.length > 0) {
-    const note = filtered ? '' : ' (showing all — IDs not in HTML)';
-    setStatus('ok', `Updated ${new Date().toLocaleTimeString()} via ${PROXIES[usedProxy].name}${note}`);
+    setStatus('ok', `Updated ${new Date().toLocaleTimeString()} via ${PROXIES[usedProxy].name}`);
     render(matches, filtered);
   } else {
     const tmp = new DOMParser().parseFromString(html, 'text/html');
@@ -596,13 +648,17 @@ function dedupe(arr) {
 
 // ─── Render ──────────────────────────────────────────────────────────────────
 function render(matches, filtered) {
+  const visible = nameTerms.length ? matches.filter(m => matchesNameFilter(m.names)) : matches;
+  const filterNote = nameTerms.length
+    ? ` matching "${nameTerms.join(', ')}"`
+    : (filtered ? ' for your competitors' : ' total (unfiltered)');
   const warning = filtered ? '' : `
     <div class="info-card" style="margin-bottom:12px;font-size:0.8rem;">
       ⚠ Could not match by registration ID — showing all parsed matches.
-      Your competitors may be mixed in; check <a href="${SOURCE_URL}" target="_blank" rel="noopener">mataction.com</a> to confirm.
+      Use the name filter above to narrow results to your competitors.
     </div>`;
-  let html = warning + `<div class="section-label">${matches.length} match${matches.length !== 1 ? 'es' : ''}${filtered ? ' for your competitors' : ' total (unfiltered)'}</div>`;
-  matches.forEach(m => {
+  let html = warning + `<div class="section-label">${visible.length} match${visible.length !== 1 ? 'es' : ''}${filterNote}</div>`;
+  visible.forEach(m => {
     const nameRows = m.names.map((name, i) => {
       const label = i === 0 ? 'Red' : i === 1 ? 'Blue' : '';
       return `${i === 1 ? '<div class="vs-divider">vs</div>' : ''}
@@ -656,6 +712,7 @@ function esc(s) {
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
+loadNameFilter();
 resetCountdown();
 doFetch(true);
 </script>
